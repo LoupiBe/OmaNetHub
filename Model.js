@@ -4,7 +4,9 @@ function sanitizeText(str) {
     .replace(/<[^>]*>/g, "")                      // Strip all HTML tags
     .replace(/[<>&"']/g, "")                      // Strip markup delimiters
     .replace(/[\u0000-\u001F\u007F-\u009F]/g, "") // Strip ASCII control characters
+    .replace(/[\u200B-\u200F\u202A-\u202E\u2060-\u2064\uFEFF]/g, "") // Strip zero-width & bidi format characters
     .trim()
+    .substring(0, 256)                            // Bound field length for layout safety
 }
 
 function parseStatus(text, root) {
@@ -45,7 +47,7 @@ function parseStatus(text, root) {
     var parts = lines[i].split("\t")
     if (parts[0] === "ts" && parts.length >= 4) {
       tailscaleUp = parts[1] === "1"
-      tailscalePeers = parseInt(parts[2], 10) || 0
+      tailscalePeers = Math.max(0, Math.min(parseInt(parts[2], 10) || 0, 9999))
       selfHost = sanitizeText(parts[3] || "localhost")
       if (parts.length >= 5) selfIp = sanitizeText(parts[4])
       if (parts.length >= 6) selfOS = sanitizeText(parts[5])
@@ -69,7 +71,8 @@ function parseStatus(text, root) {
       ssid = sanitizeText(parts[1])
       netType = sanitizeText(parts[2])
       netIp = sanitizeText(parts[3])
-      signal = parseInt(parts[4], 10) || -1
+      var sigParsed = parseInt(parts[4], 10)
+      signal = isNaN(sigParsed) ? -1 : Math.min(100, Math.max(0, sigParsed))
       metered = parts[5] === "1"
       if (parts.length >= 7) gateway = sanitizeText(parts[6])
       if (parts.length >= 8) wifiRadio = parts[7] === "1"
@@ -92,7 +95,7 @@ function parseStatus(text, root) {
       dataSource = sanitizeText(parts[3])
     } else if (parts[0] === "fw" && parts.length >= 3) {
       fwActive = parts[1] === "1"
-      fwRules = parseInt(parts[2], 10) || 0
+      fwRules = Math.max(0, Math.min(parseInt(parts[2], 10) || 0, 9999))
     } else if (parts[0] === "fwrule" && parts.length >= 4) {
       var action = sanitizeText(parts[1])
       var proto = sanitizeText(parts[2])
@@ -157,7 +160,7 @@ function osIcon(os) {
   if (s.indexOf("linux") !== -1 || s.indexOf("arch") !== -1) return "󰌽"
   if (s.indexOf("darwin") !== -1 || s.indexOf("macos") !== -1 || s.indexOf("ios") !== -1 || s.indexOf("apple") !== -1) return "󰀵"
   if (s.indexOf("windows") !== -1) return "󰖳"
-  return "󰒊"
+  return "󰾰"
 }
 
 function signalIcon(signal, type) {
@@ -178,7 +181,7 @@ function barIcon(signal, netType, tailscaleUp) {
     if (signal >= 25) return "󰤢"
     return "󰤟"
   }
-  if (tailscaleUp) return "󰒊"
+  if (tailscaleUp) return "󰖂"
   return "󰤮"
 }
 

@@ -160,7 +160,7 @@ Panel {
       bar: root.bar
       text: root.barText
       fixedWidth: Style.space(30)
-      tooltipText: "Network Hub (" + (root.ssid !== "" ? root.ssid : Model.typeLabel(root.netType)) + ")"
+      tooltipText: "Network Hub"
       onPressed: function(b) { root.toggle() }
     }
 
@@ -290,7 +290,7 @@ Panel {
           FlatTabButton {
             width: (parent.width - Style.space(8)) / 3
             label: "Firewall"
-            icon: "󰞷"
+            icon: "󰒃"
             badge: root.fwActive ? String(root.fwRules) : "off"
             selected: root.currentTab === "firewall"
             onClicked: root.currentTab = "firewall"
@@ -434,7 +434,7 @@ Panel {
                 InfoRow {
                   visible: root.routerPing !== "" || root.internetPing !== ""
                   label: "Latency"
-                  value: (root.routerPing !== "" ? "󰋜 " + root.routerPing + " ms (Router)   " : "") + (root.internetPing !== "" ? "󰖟 " + root.internetPing + " ms (Internet)" : "")
+                  value: (root.routerPing !== "" ? "󰑩 " + root.routerPing + " ms (Router)   " : "") + (root.internetPing !== "" ? "󰖟 " + root.internetPing + " ms (Internet)" : "")
                 }
               }
 
@@ -693,7 +693,7 @@ Panel {
 
             PanelActionButton {
               id: adminBtn
-              iconText: "󰌷"
+              iconText: "󰏌"
               tooltipText: "Open Tailscale admin console (web)"
               foreground: root.foreground
               fontFamily: root.fontFamily
@@ -855,7 +855,7 @@ Panel {
                             width: parent.width
                             visible: modelData.dnsName !== ""
                             label: "Copy DNS Name"
-                            icon: "󰖟"
+                            icon: "󰇖"
                             onClicked: { root.copyToClipboard(modelData.dnsName, modelData.host + " DNS Name"); copyPopup.close() }
                           }
                         }
@@ -864,7 +864,7 @@ Panel {
 
                     PanelActionButton {
                       iconText: "󰒊"
-                      tooltipText: "Send files to " + (modelData.host.length > 35 ? modelData.host.substring(0, 32) + "..." : modelData.host) + " (Taildrop)"
+                      tooltipText: "Send files (Taildrop)"
                       foreground: root.foreground
                       fontFamily: root.fontFamily
                       enabled: modelData.online
@@ -919,7 +919,7 @@ Panel {
                 spacing: Style.space(8)
 
                 Text {
-                  text: root.fwActive ? "󰒃" : "󰒄"
+                  text: root.fwActive ? "󰕥" : "󰦞"
                   textFormat: Text.PlainText
                   font.family: root.fontFamily
                   font.pixelSize: Style.font.title
@@ -957,7 +957,7 @@ Panel {
                 spacing: Style.space(6)
 
                 PanelActionButton {
-                  iconText: "󰞷"
+                  iconText: "󰒃"
                   tooltipText: "View UFW rules in terminal"
                   foreground: root.foreground
                   fontFamily: root.fontFamily
@@ -1051,8 +1051,8 @@ Panel {
 
                   PanelActionButton {
                     id: ruleDeleteBtn
-                    iconText: "󰅖"
-                    tooltipText: "Close port " + modelData.port + "/" + modelData.proto.toLowerCase()
+                    iconText: "󰩺"
+                    tooltipText: "Delete this allow rule"
                     foreground: "#ff5555"
                     fontFamily: root.fontFamily
                     anchors.right: parent.right

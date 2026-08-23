@@ -3,18 +3,22 @@
 # Network Hub actions: <verb> [args...]
 #   notify <message>
 #   ts-up | ts-down
-#   ts-send <machine> [files...]
 #   wifi-toggle | wifi-restart | wifi-qr | speedtest
 #   fw-enable | fw-disable | fw-open <port> [proto] | fw-close <port> [proto]
 
 verb=$1
 shift || true
 
+# Strip markup delimiters and control characters before notification rendering
+clean() {
+  printf '%s' "$1" | tr -d "<>\"&'" | tr -d '[:cntrl:]'
+}
+
 notify() {
-  omarchy notification send "Network Hub" "$1" -u low -g 󰇣 2>/dev/null
+  omarchy notification send "Network Hub" "$(clean "$1")" -u low -g 󰌗 2>/dev/null
 }
 fail() {
-  omarchy notification send "Network Hub" "$1" -u critical -g 󰇣 2>/dev/null
+  omarchy notification send "Network Hub" "$(clean "$1")" -u critical -g 󰌗 2>/dev/null
 }
 
 case "$verb" in
@@ -26,17 +30,6 @@ case "$verb" in
     ;;
   ts-down)
     tailscale down >/dev/null 2>&1 && notify "Tailscale disconnected" || fail "Tailscale failed to stop"
-    ;;
-  ts-send)
-    machine="$1"
-    shift || true
-    if command -v omarchy-tailscale-send >/dev/null 2>&1; then
-      omarchy-tailscale-send "$machine" "$@" &
-    elif command -v omarchy >/dev/null 2>&1; then
-      omarchy tailscale send "$machine" "$@" &
-    else
-      tailscale file cp "$@" "$machine:" >/dev/null 2>&1 && notify "Sent to $machine" || fail "Taildrop failed"
-    fi
     ;;
   wifi-toggle)
     current=$(nmcli radio wifi 2>/dev/null)
@@ -61,12 +54,20 @@ case "$verb" in
     ;;
   set-band)
     band="$1"
+    if [[ ! "$band" =~ ^(auto|2\.4|5)$ ]]; then
+      fail "Invalid band selection"
+      exit 1
+    fi
     if command -v omarchy-network-band >/dev/null 2>&1; then
       omarchy-network-band "$band" >/dev/null 2>&1 && notify "Band set to $band" || fail "Failed to set band"
     fi
     ;;
   set-dns)
     provider="$1"
+    if [[ ! "$provider" =~ ^(DHCP|Cloudflare|Google|Mullvad|Custom)$ ]]; then
+      fail "Invalid DNS provider"
+      exit 1
+    fi
     if [ "$provider" = "Custom" ]; then
       omarchy-launch-floating-terminal-with-presentation "omarchy-dns Custom" &
     elif command -v omarchy-dns >/dev/null 2>&1; then
