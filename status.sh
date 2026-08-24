@@ -117,7 +117,7 @@ if command -v vnstat >/dev/null 2>&1; then
     if [ "$cap" -gt 0 ] && [ $((rx + tx)) -ge "$cap" ] && [ ! -f "$state_dir/link-cap-notified" ]; then
       mkdir -p "$state_dir"
       touch "$state_dir/link-cap-notified"
-      omarchy notification send "Data cap reached" "$(human $((rx + tx))) used today" -u critical -g 󰇣
+      omarchy notification send "Data cap reached" "$(human $((rx + tx))) used today" -u critical -g 󰌗
     elif [ $((rx + tx)) -lt "$cap" ] && [ -f "$state_dir/link-cap-notified" ]; then
       rm -f "$state_dir/link-cap-notified"
     fi

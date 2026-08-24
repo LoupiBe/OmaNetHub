@@ -1,10 +1,47 @@
 #!/bin/bash
 
+# Strip markup delimiters and control characters before rendering: peer names
+# come straight from tailscale JSON and omarchy.menu draws option labels with
+# rich-text-capable Text items.
+clean() {
+  printf '%s' "$1" | tr -d "<>\"&'" | tr -d '[:cntrl:]'
+}
+
 if [ $# -eq 0 ]; then
   exit 0
 fi
 
-MAPPING=$(tailscale status --json 2>/dev/null | jq -r '.Peer // {} | to_entries[] | select(.value.Online == true) | "\(.value.HostName) (\(.value.TailscaleIPs[0]))|\(.value.TailscaleIPs[0])|\(.value.HostName)"' 2>/dev/null)
+RAW=$(tailscale status --json 2>/dev/null | jq -r '.Peer // {} | to_entries[] | select(.value.Online == true) | [(.value.DNSName // ""), (.value.HostName // ""), (.value.TailscaleIPs[0] // "")] | @tsv' 2>/dev/null)
+
+if [ -z "$RAW" ]; then
+  omarchy notification send "Taildrop" "No online peers found" -u normal -g 󰒊 2>/dev/null
+  exit 1
+fi
+
+# Build "target|label" pairs. Targets are hostname-first (MagicDNS name with
+# its trailing dot stripped, then short host, then IP) to match upstream's
+# peerAddress() ordering; labels are sanitized for the menu renderer.
+# Fields are split by parameter expansion because "read" would swallow the
+# leading tab of rows whose first field is empty.
+MAPPING=""
+while IFS= read -r line; do
+  [ -z "$line" ] && continue
+  dns=${line%%$'\t'*}
+  rest=${line#*$'\t'}
+  host=${rest%%$'\t'*}
+  ip=${rest##*$'\t'}
+  target="${dns%.}"
+  [ -z "$target" ] && target="$host"
+  [ -z "$target" ] && target="$ip"
+  [ -z "$target" ] && continue
+  label="$(clean "$host")"
+  if [ -n "$label" ] && [ -n "$ip" ]; then
+    label="$label ($ip)"
+  elif [ -n "$ip" ]; then
+    label="$ip"
+  fi
+  MAPPING+="${target}|${label}"$'\n'
+done <<< "$RAW"
 
 if [ -z "$MAPPING" ]; then
   omarchy notification send "Taildrop" "No online peers found" -u normal -g 󰒊 2>/dev/null
@@ -12,7 +49,7 @@ if [ -z "$MAPPING" ]; then
 fi
 
 OPTIONS=()
-while IFS='|' read -r label ip host; do
+while IFS='|' read -r _target label; do
   [ -z "$label" ] && continue
   OPTIONS+=("$label")
 done <<< "$MAPPING"
@@ -25,17 +62,15 @@ else
 fi
 
 if [ -n "$TARGET_LABEL" ]; then
-  TARGET_IP=""
-  TARGET_NAME=""
-  while IFS='|' read -r label ip host; do
+  TARGET=""
+  while IFS='|' read -r target label; do
     if [ "$label" = "$TARGET_LABEL" ]; then
-      TARGET_IP="$ip"
-      TARGET_NAME="$host"
+      TARGET="$target"
       break
     fi
   done <<< "$MAPPING"
 
-  if [ -n "$TARGET_IP" ]; then
-    "$(dirname "$0")/taildrop-direct-send" "$TARGET_IP" "$TARGET_NAME" "$@"
+  if [ -n "$TARGET" ]; then
+    "$(dirname "$0")/taildrop-direct-send" "$TARGET" "$@"
   fi
 fi

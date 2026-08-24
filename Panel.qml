@@ -80,9 +80,9 @@ Panel {
 
   function sendPeerFile(peer, files) {
     if (!peer) return
-    var targetIp = peer.ip || peer.host
-    if (!targetIp) return
-    var cmd = [root.scriptDir + "/bin/taildrop-direct-send", targetIp, peer.host]
+    var target = peer.target || peer.host || peer.ip
+    if (!target) return
+    var cmd = [root.scriptDir + "/bin/taildrop-direct-send", target]
     if (files && files.length > 0) cmd = cmd.concat(files)
     Quickshell.execDetached(cmd)
     root.close()

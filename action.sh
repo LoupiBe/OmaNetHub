@@ -40,8 +40,8 @@ case "$verb" in
     fi
     ;;
   wifi-restart)
-    if command -v omarchy >/dev/null 2>&1; then
-      omarchy restart wifi >/dev/null 2>&1 && notify "Wi-Fi restarted" || fail "Wi-Fi restart failed"
+    if command -v omarchy-restart-wifi >/dev/null 2>&1; then
+      omarchy-restart-wifi >/dev/null 2>&1 && notify "Wi-Fi restarted" || fail "Wi-Fi restart failed"
     else
       nmcli radio wifi off && sleep 1 && nmcli radio wifi on && notify "Wi-Fi reset" || fail "Wi-Fi reset failed"
     fi
