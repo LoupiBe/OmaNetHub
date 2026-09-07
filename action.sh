@@ -1,4 +1,6 @@
 #!/bin/bash
+export PATH="/usr/bin:/bin"
+export LC_ALL=C
 
 # Network Hub actions: <verb> [args...]
 #   notify <message>
@@ -15,10 +17,10 @@ clean() {
 }
 
 notify() {
-  omarchy notification send "Network Hub" "$(clean "$1")" -u low -g 󰌗 2>/dev/null
+  omarchy notification send -u low -g 󰌗 "Network Hub" "$(clean "$1")" 2>/dev/null
 }
 fail() {
-  omarchy notification send "Network Hub" "$(clean "$1")" -u critical -g 󰌗 2>/dev/null
+  omarchy notification send -u critical -g 󰌗 "Network Hub" "$(clean "$1")" 2>/dev/null
 }
 
 case "$verb" in
@@ -30,6 +32,74 @@ case "$verb" in
     ;;
   ts-down)
     tailscale down >/dev/null 2>&1 && notify "Tailscale disconnected" || fail "Tailscale failed to stop"
+    ;;
+  set-exit-node)
+    target="$1"
+    if [ -z "$target" ]; then
+      if timeout 10 tailscale set --exit-node="" >/dev/null 2>&1 || (command -v sudo >/dev/null 2>&1 && timeout 10 sudo -n tailscale set --exit-node="" >/dev/null 2>&1) || (command -v pkexec >/dev/null 2>&1 && timeout 10 pkexec tailscale set --exit-node="" >/dev/null 2>&1); then
+        notify "Exit node disconnected"
+      else
+        fail "Failed to disconnect exit node"
+        echo "Failed to disconnect exit node" >&2
+        exit 1
+      fi
+    else
+      if timeout 10 tailscale set --exit-node="$target" >/dev/null 2>&1 || (command -v sudo >/dev/null 2>&1 && timeout 10 sudo -n tailscale set --exit-node="$target" >/dev/null 2>&1) || (command -v pkexec >/dev/null 2>&1 && timeout 10 pkexec tailscale set --exit-node="$target" >/dev/null 2>&1); then
+        notify "Exit node set to $target"
+      else
+        fail "Failed to set exit node to $target"
+        echo "Failed to set exit node to $target" >&2
+        exit 1
+      fi
+    fi
+    ;;
+  clear-exit-node)
+    if timeout 10 tailscale set --exit-node="" >/dev/null 2>&1 || (command -v sudo >/dev/null 2>&1 && timeout 10 sudo -n tailscale set --exit-node="" >/dev/null 2>&1) || (command -v pkexec >/dev/null 2>&1 && timeout 10 pkexec tailscale set --exit-node="" >/dev/null 2>&1); then
+      notify "Exit node disconnected"
+    else
+      fail "Failed to disconnect exit node"
+      echo "Failed to disconnect exit node" >&2
+      exit 1
+    fi
+    ;;
+  wifi-connect)
+    ssid="$1"
+    pw="$2"
+    if [ -z "$ssid" ]; then
+      fail "No Wi-Fi network specified"
+      echo "No Wi-Fi network specified" >&2
+      exit 1
+    fi
+    if [ -n "$pw" ]; then
+      out=$(timeout 25 nmcli dev wifi connect "$ssid" password "$pw" 2>&1)
+      rc=$?
+    else
+      out=$(timeout 25 nmcli dev wifi connect "$ssid" 2>&1)
+      rc=$?
+      if [ $rc -ne 0 ]; then
+        out=$(timeout 15 nmcli connection up id "$ssid" 2>&1)
+        rc=$?
+      fi
+    fi
+    if [ $rc -eq 0 ]; then
+      notify "Connected to $ssid"
+    else
+      err=$(echo "$out" | sed 's/^Error: //' | head -n 1)
+      fail "${err:-Failed to connect to $ssid}"
+      echo "$err" >&2
+      exit $rc
+    fi
+    ;;
+  wifi-disconnect)
+    active=$(nmcli -t -f DEVICE,TYPE,STATE dev status 2>/dev/null | awk -F: '$2=="wifi" && $3 ~ /^connected/ {print $1; exit}')
+    if [ -n "$active" ]; then
+      nmcli device disconnect "$active" >/dev/null 2>&1 && notify "Wi-Fi disconnected" || fail "Failed to disconnect Wi-Fi"
+    else
+      notify "Wi-Fi disconnected"
+    fi
+    ;;
+  wifi-rescan)
+    timeout 5 nmcli dev wifi rescan >/dev/null 2>&1 && notify "Wi-Fi scan refreshed" || true
     ;;
   wifi-toggle)
     current=$(nmcli radio wifi 2>/dev/null)
