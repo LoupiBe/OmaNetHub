@@ -89,9 +89,14 @@ wifi_radio=0
 
 printf 'net\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n' "$ssid" "$(strip_delims "$type")" "$(strip_delims "$ip")" "$signal" "$metered" "$(strip_delims "$gateway")" "$wifi_radio" "$(strip_delims "$active")" "$(strip_delims "$freq")"
 
-# ---------- wifi scan (when wifi radio is enabled) ----------
-if [ "$wifi_radio" -eq 1 ]; then
-  saved=$(timeout 2 nmcli -t -f NAME,TYPE connection show 2>/dev/null | awk -F: '
+# ---------- wifi scan (when wifi radio is enabled and disconnected) ----------
+if [ "$wifi_radio" -eq 1 ] && [ -z "$ssid" ]; then
+  uuids=$(timeout 2 nmcli -t -f UUID,TYPE connection show 2>/dev/null | awk -F: '$2 ~ /^(802-11-wireless|wifi)$/ {print $1}')
+  saved_ssids=""
+  if [ -n "$uuids" ]; then
+    saved_ssids=$(timeout 2 nmcli -g 802-11-wireless.ssid connection show $uuids 2>/dev/null | sed '/^$/d')
+  fi
+  saved_names=$(timeout 2 nmcli -t -f NAME,TYPE connection show 2>/dev/null | awk -F: '
     $NF ~ /^(802-11-wireless|wifi)$/ {
       name = $1
       for (i = 2; i < NF; i++) {
@@ -101,6 +106,7 @@ if [ "$wifi_radio" -eq 1 ]; then
       print name
     }
   ')
+  saved=$(printf '%s\n%s\n' "$saved_ssids" "$saved_names")
   timeout 4 nmcli -t -f IN-USE,SSID,SIGNAL,SECURITY dev wifi list 2>/dev/null | awk -F: -v saved="$saved" -v cur_ssid="$ssid" '
   BEGIN {
     split(saved, s_arr, "\n")
@@ -144,7 +150,7 @@ fi
 
 # ---------- network diagnostics (from omarchy-network-status) ----------
 if command -v omarchy-network-status >/dev/null 2>&1; then
-  net_verbose=$(omarchy-network-status --verbose 2>/dev/null | head -c 4096)
+  net_verbose=$(timeout 3 omarchy-network-status --verbose 2>/dev/null | head -c 4096)
   bitrate=$(echo "$net_verbose" | awk '$1=="bitrate"{for(i=2;i<=NF;i++) printf "%s ", $i; print ""}' | xargs)
   router_ping=$(echo "$net_verbose" | awk '$1=="router_ping_ms"{print $2}')
   internet_ping=$(echo "$net_verbose" | awk '$1=="internet_ping_ms"{print $2}')
@@ -154,7 +160,7 @@ fi
 
 # ---------- network band & dns ----------
 if command -v omarchy-network-band >/dev/null 2>&1; then
-  band_out=$(omarchy-network-band 2>/dev/null | head -c 2048)
+  band_out=$(timeout 2 omarchy-network-band 2>/dev/null | head -c 2048)
   cur_band=$(echo "$band_out" | awk '$1=="band"{print $2}')
   sel_band=$(echo "$band_out" | awk '$1=="selected"{print $2}')
   avail_band=$(echo "$band_out" | awk '$1=="available"{print $2}')
@@ -162,7 +168,7 @@ if command -v omarchy-network-band >/dev/null 2>&1; then
 fi
 
 if command -v omarchy-dns >/dev/null 2>&1; then
-  cur_dns=$(omarchy-dns 2>/dev/null | head -n 1 | head -c 256 | xargs)
+  cur_dns=$(timeout 2 omarchy-dns 2>/dev/null | head -n 1 | head -c 256 | xargs)
   printf 'netdns\t%s\n' "$(strip_delims "$cur_dns")"
 fi
 

@@ -96,14 +96,12 @@ Panel {
     root.wifiActionKind = "connect"
     root.wifiErrorSsid = ""
     root.wifiErrorMsg = ""
-    if (password !== undefined && password !== null && password !== "") {
-      root.runAction(["wifi-connect", ssid, password])
-    } else {
-      root.runAction(["wifi-connect", ssid])
-    }
+    actionProc.stdinSecret = (password !== undefined && password !== null) ? password : ""
+    root.runAction(["wifi-connect", ssid])
   }
 
   function cancelWifiPassword() {
+    actionProc.stdinSecret = ""
     root.wifiPasswordSsid = ""
     root.wifiPasswordText = ""
     root.wifiErrorSsid = ""
@@ -167,6 +165,14 @@ Panel {
   Process {
     id: actionProc
     command: []
+    property string stdinSecret: ""
+    stdinEnabled: true
+    onStarted: {
+      if (stdinSecret !== "") {
+        write(stdinSecret + "\n")
+        stdinSecret = ""
+      }
+    }
     stdout: StdioCollector { id: actionStdout; waitForEnd: true; onStreamFinished: root._actionStdoutText = text }
     stderr: StdioCollector { id: actionStderr; waitForEnd: true; onStreamFinished: root._actionStderrText = text }
     onExited: function(exitCode) {
@@ -191,13 +197,14 @@ Panel {
 
   Component.onCompleted: refresh()
   Component.onDestruction: {
+    actionProc.stdinSecret = ""
     if (statusProc.running) statusProc.running = false
     if (actionProc.running) actionProc.running = false
   }
 
   Timer {
     id: statusWatchdog
-    interval: 6000
+    interval: 12000
     repeat: false
     running: statusProc.running
     onTriggered: {
@@ -211,6 +218,7 @@ Panel {
     repeat: false
     running: actionProc.running
     onTriggered: {
+      actionProc.stdinSecret = ""
       if (actionProc.running) actionProc.running = false
       if (root.wifiActionSsid !== "") {
         root.wifiErrorSsid = root.wifiActionSsid

@@ -65,14 +65,28 @@ case "$verb" in
   wifi-connect)
     ssid="$1"
     pw="$2"
+    if [ -z "$pw" ] && [ ! -t 0 ]; then
+      IFS= read -r pw || true
+    fi
     if [ -z "$ssid" ]; then
       fail "No Wi-Fi network specified"
       echo "No Wi-Fi network specified" >&2
       exit 1
     fi
     if [ -n "$pw" ]; then
-      out=$(timeout 25 nmcli dev wifi connect "$ssid" password "$pw" 2>&1)
+      u=$(timeout 5 nmcli -t -f UUID,NAME connection show 2>/dev/null | awk -F: -v s="$ssid" '$2==s {print $1; exit}')
+      created=0
+      if [ -z "$u" ]; then
+        u=$(uuidgen 2>/dev/null || cat /proc/sys/kernel/random/uuid 2>/dev/null || tr -dc 'a-f0-9' < /dev/urandom | head -c 32)
+        timeout 10 nmcli connection add type wifi con-name "$ssid" ssid "$ssid" connection.uuid "$u" autoconnect yes >/dev/null 2>&1
+        created=1
+      fi
+      printf 'set wifi-sec.key-mgmt wpa-psk\nset wifi-sec.psk %s\nsave\nquit\n' "$pw" | timeout 10 nmcli connection edit uuid "$u" >/dev/null 2>&1
+      out=$(timeout 25 nmcli connection up uuid "$u" 2>&1)
       rc=$?
+      if [ $rc -ne 0 ] && [ "$created" -eq 1 ]; then
+        timeout 5 nmcli connection delete uuid "$u" >/dev/null 2>&1 || true
+      fi
     else
       out=$(timeout 25 nmcli dev wifi connect "$ssid" 2>&1)
       rc=$?
@@ -93,7 +107,12 @@ case "$verb" in
   wifi-disconnect)
     active=$(nmcli -t -f DEVICE,TYPE,STATE dev status 2>/dev/null | awk -F: '$2=="wifi" && $3 ~ /^connected/ {print $1; exit}')
     if [ -n "$active" ]; then
-      nmcli device disconnect "$active" >/dev/null 2>&1 && notify "Wi-Fi disconnected" || fail "Failed to disconnect Wi-Fi"
+      if timeout 10 nmcli device disconnect "$active" >/dev/null 2>&1; then
+        notify "Wi-Fi disconnected"
+      else
+        fail "Failed to disconnect Wi-Fi"
+        exit 1
+      fi
     else
       notify "Wi-Fi disconnected"
     fi
