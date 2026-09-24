@@ -785,7 +785,7 @@ Panel {
                               TextField {
                                 id: wifiPwInput
                                 width: parent.width - inlineConnectBtn.implicitWidth - inlineCancelBtn.implicitWidth - Style.space(12)
-                                password: true
+echoMode: TextInput.Password
                                 placeholderText: "Wi-Fi Password"
                                 text: root.wifiPasswordSsid === modelData.ssid ? root.wifiPasswordText : ""
                                 font.family: root.fontFamily
