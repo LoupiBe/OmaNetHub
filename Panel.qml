@@ -90,14 +90,18 @@ Panel {
     actionProc.running = true
   }
 
-  function connectWifi(ssid, password) {
+  function connectWifi(ssid, password, security) {
     if (!ssid || root.wifiActionSsid !== "" || actionProc.running) return
     root.wifiActionSsid = ssid
     root.wifiActionKind = "connect"
     root.wifiErrorSsid = ""
     root.wifiErrorMsg = ""
-    actionProc.stdinSecret = (password !== undefined && password !== null) ? password : ""
-    root.runAction(["wifi-connect", ssid])
+    actionProc.stdinSecret = (password !== undefined && password !== null && password !== "") ? password : ""
+    if (actionProc.stdinSecret !== "") {
+      root.runAction(["wifi-connect", ssid, "--stdin", security || ""])
+    } else {
+      root.runAction(["wifi-connect", ssid])
+    }
   }
 
   function cancelWifiPassword() {
@@ -214,7 +218,7 @@ Panel {
 
   Timer {
     id: actionWatchdog
-    interval: 30000
+    interval: 60000
     repeat: false
     running: actionProc.running
     onTriggered: {
@@ -785,7 +789,7 @@ Panel {
                               TextField {
                                 id: wifiPwInput
                                 width: parent.width - inlineConnectBtn.implicitWidth - inlineCancelBtn.implicitWidth - Style.space(12)
-echoMode: TextInput.Password
+                                echoMode: TextInput.Password
                                 placeholderText: "Wi-Fi Password"
                                 text: root.wifiPasswordSsid === modelData.ssid ? root.wifiPasswordText : ""
                                 font.family: root.fontFamily
@@ -796,7 +800,7 @@ echoMode: TextInput.Password
                                 onTextChanged: if (root.wifiPasswordSsid === modelData.ssid && text !== root.wifiPasswordText) root.wifiPasswordText = text
                                 onAccepted: {
                                   if (text.length > 0 && root.wifiActionSsid === "") {
-                                    root.connectWifi(modelData.ssid, text)
+                                    root.connectWifi(modelData.ssid, text, modelData.security)
                                   }
                                 }
                                 Keys.onEscapePressed: root.cancelWifiPassword()
@@ -815,7 +819,7 @@ echoMode: TextInput.Password
                                 activeFocusOnTab: true
                                 enabled: root.wifiPasswordText.length > 0 && root.wifiActionSsid === ""
                                 anchors.verticalCenter: parent.verticalCenter
-                                onClicked: root.connectWifi(modelData.ssid, root.wifiPasswordText)
+                                onClicked: root.connectWifi(modelData.ssid, root.wifiPasswordText, modelData.security)
                               }
 
                               Button {
@@ -1076,7 +1080,7 @@ echoMode: TextInput.Password
                     spacing: Style.space(6)
 
                     Text {
-                      text: "Exit Node: " + (root.exitNodeHost !== "" ? root.exitNodeHost : root.exitNodeIp)
+                      text: "Exit Node: " + (root.exitNodeHost !== "" ? (root.exitNodeIp !== "" ? root.exitNodeHost + " (" + root.exitNodeIp + ")" : root.exitNodeHost) : root.exitNodeIp)
                       textFormat: Text.PlainText
                       font.family: root.fontFamily
                       font.pixelSize: Style.font.caption

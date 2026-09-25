@@ -68,8 +68,9 @@ else
 fi
 
 # ---------- network ----------
-active=$(timeout 2 nmcli -t -f DEVICE,TYPE,STATE dev status 2>/dev/null | awk -F: '$3 ~ /^connected/ && ($2=="wifi" || $2=="ethernet") {print $1; exit}')
-[ -z "$active" ] && active=$(timeout 2 nmcli -t -f DEVICE,TYPE,STATE dev status 2>/dev/null | awk -F: '$3 ~ /^connected/ && $2 != "loopback" {print $1; exit}')
+dev_status=$(timeout 2 nmcli -t -f DEVICE,TYPE,STATE dev status 2>/dev/null)
+active=$(echo "$dev_status" | awk -F: '$3 ~ /^connected/ && ($2=="wifi" || $2=="ethernet") {print $1; exit}')
+[ -z "$active" ] && active=$(echo "$dev_status" | awk -F: '$3 ~ /^connected/ && $2 != "loopback" {print $1; exit}')
 ssid=""; type=""; ip=""; signal=""; metered=0; freq=""
 if [ -n "$active" ]; then
   type=$(timeout 2 nmcli -t -f GENERAL.TYPE device show "$active" 2>/dev/null | head -n 1 | cut -d: -f2 | head -c 32)
@@ -174,13 +175,15 @@ fi
 
 # ---------- data usage ----------
 if command -v vnstat >/dev/null 2>&1; then
-  viface="${active:-$(ip route show default 2>/dev/null | awk '{print $5}' | head -n 1 | head -c 64)}"
-  viface="${viface:-$(vnstat --oneline 2>/dev/null | head -n 1 | cut -d: -f1 | head -c 64 | xargs)}"
+  viface="${active:-$(timeout 2 ip route show default 2>/dev/null | awk '{print $5}' | head -n 1 | head -c 64)}"
+  viface="${viface:-$(timeout 3 vnstat --oneline 2>/dev/null | head -n 1 | cut -d\; -f2 | head -c 64 | xargs)}"
   vn_cmd=(vnstat -d 1 --json)
   [ -n "$viface" ] && vn_cmd+=( -i "$viface" )
-  vn_json=$("${vn_cmd[@]}" 2>/dev/null | head -c 32768)
+  vn_json=$("${vn_cmd[@]}" 2>/dev/null | head -c 1048576)
   rx=$(echo "$vn_json" | jq -r '((.interfaces[0].traffic.day[-1] // {}) | .rx // 0)' 2>/dev/null)
   tx=$(echo "$vn_json" | jq -r '((.interfaces[0].traffic.day[-1] // {}) | .tx // 0)' 2>/dev/null)
+  case "$rx" in ''|*[!0-9]*) rx=0 ;; esac
+  case "$tx" in ''|*[!0-9]*) tx=0 ;; esac
   printf 'data\t%s\t%s\tvnstat\n' "$(human "${rx:-0}")" "$(human "${tx:-0}")"
 
   # daily cap alert (cap file: bytes as integer)
@@ -210,8 +213,8 @@ else
 fi
 
 # ---------- firewall ----------
-active=$(systemctl is-active ufw 2>/dev/null)
-[ "$active" = "active" ] && a=1 || a=0
+fw_state=$(timeout 3 systemctl is-active ufw 2>/dev/null)
+[ "$fw_state" = "active" ] && a=1 || a=0
 rules=$(grep -c "^-A ufw-user-input" /etc/ufw/user.rules 2>/dev/null)
 printf 'fw\t%s\t%s\n' "$a" "${rules:-0}"
 
